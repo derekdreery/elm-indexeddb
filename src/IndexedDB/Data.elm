@@ -8,13 +8,12 @@ module IndexedDB.Data exposing
   , Error
   )
 
-{-| This module contains the possible upgrade operations to a database.
-
-It is used when creating an upgrade function `Int -> Int -> List Operation`
+{-| This module contains the possible data operations.
 
 # Types
 
-@docs Transaction, Operation, OperationType, KeyRange, KeyOrRange, Error
+@docs Transaction, Operation, OperationType, KeyRange, KeyOrRange, ErrorType,
+      Error
 -}
 
 import IndexedDB.Common exposing (StoreName, IndexName)
@@ -80,7 +79,7 @@ type KeyOrRange
 -}
 type ErrorType
   = Abort
-  | NoIndexedDBError String
+  | NotFoundError
 
 
 {-| The error type

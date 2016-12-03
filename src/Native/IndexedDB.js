@@ -35,15 +35,26 @@ function noDatabaseError(db) {
     };
 }
 
+var abortError = {
+    ctor: "Abort",
+    _0: "The IndexedDB transaction was aborted"
+};
+
+/**
+ * Convert a js error to an elm error
+ */
+function jsErrorToError(err) {
+    return {
+        ctor: err.name,
+        _0: err.message
+    };
+}
+
 /**
  * Convert an indexedDB error event to an elm error
  */
 function eventToError(event) {
-    var rawerror = event.target.error
-    return {
-        ctor: rawerror.name,
-        _0: rawerror.message
-    }
+    return jsErrorToError(event.target.error);
 }
 
 // HELPER FUNCTIONS
@@ -132,6 +143,93 @@ function applyUpgradeAction(db, action, objectStores, transaction) {
     }
 }
 
+/**
+ *
+ */
+function getTransactionParameters(operations) {
+    var i, l, op, store
+      , stores = [] // `Set` would be a better data structure, but not old js
+      , write = false;
+    for (i=0, l=operations.length; i<l; i++) {
+        op = operations[i];
+        store = op._0;
+
+        switch (op._1.ctor) {
+        case "Add":
+        case "Clear":
+        case "Delete":
+        case "Put":
+            write = true;
+            break;
+        case "Get":
+        case "Count":
+            // no-op
+            break;
+        default:
+            throw new Error(
+                "Invalid operation type '" + op.ctor + "', this " +
+                "is a bug in elm-indexeddb - please report it!"
+            );
+        }
+
+        // ie9+ only - is this OK? A: yes, as IDB is ie10+
+        if (stores.indexOf(store) == -1) {
+            stores.push(store);
+        }
+    }
+
+    return {
+        stores: stores,
+        write: write
+    };
+}
+
+/**
+ *
+ */
+function applyTransactionOperation(transaction, op) {
+    var store = transaction.objectStore(op._0);
+    op = op._1;
+
+    switch (op.ctor) {
+    case "Add":
+        //console.log(op);
+        // op._1 = Maybe Value
+        switch (op._1.ctor) {
+        case 'Just':
+            throw new Error("unimplemented");
+            // IDB call (with key)
+            store.add(op._0, op._1._0);
+            break;
+        case 'Nothing':
+            // IDB call
+            store.add(op._0);
+            break;
+        default:
+            throw new Error("Really should be unreachable");
+        }
+        break;
+    case "Clear":
+        // IDB call
+        store.clear();
+        break;
+    case "Delete":
+        throw new Error("need keyorrange");
+        break;
+    case "Put":
+        break;
+    case "Get":
+        break;
+    case "Count":
+        break;
+    default:
+        throw new Error(
+            "Invalid operation type '" + op.ctor + "', this " +
+            "is a bug in elm-indexeddb - please report it!"
+        );
+    }
+}
+
 // CALLABLE METHODS
 
 /**
@@ -199,17 +297,46 @@ function open(name, version, upgradeFn) {
  */
 function transaction(db, operations) {
     return _elm_lang$core$Native_Scheduler.nativeBinding(function(callback) {
+        var i, l, op, transParams, transaction;
         if (databases[db] == null) {
             callback(_elm_lang$core$Native_Scheduler.fail(noDatabaseError(db)));
             return;
         }
         db = databases[db];
+        // convert to array for ease of use
         operations = _elm_lang$core$Native_List.toArray(operations);
-        while (operations.ctor == "::") {
-            // something
-            console.log(operations._0);
-            operations = operations._1;
+        // Work out what we need to know to open the transaction
+        transParams = getTransactionParameters(operations);
+        try {
+            // create the IDB transaction
+            transaction = db.transaction(
+                transParams.stores,
+                transParams.write ? 'readwrite' : 'readonly'
+            );
+        } catch (err) {
+            //console.log(err);
+            callback(_elm_lang$core$Native_Scheduler.fail(jsErrorToError(err)));
+            return;
         }
+
+        for (i=0, l=operations.length; i<l; i++) {
+            op = operations[i];
+            applyTransactionOperation(transaction, op);
+
+        }
+
+        transaction.oncomplete = function(evt) {
+            //console.log("transaction.oncomplete");
+            callback(_elm_lang$core$Native_Scheduler.succeed());
+        };
+
+        transaction.onabort = function(evt) {
+            callback(_elm_lang$core$Native_Scheduler.fail(abortError));
+        };
+
+        transaction.onerror = function(evt) {
+            callback(_elm_lang$core$Native_Scheduler.fail(eventToError(evt)));
+        };
     });
 }
 
