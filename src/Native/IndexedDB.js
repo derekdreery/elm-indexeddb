@@ -1,5 +1,6 @@
 
 var _derekdreery$elm_indexeddb$Native_IndexedDB = function() {
+"use strict";
 
 /*
  * This library is structured as follows:
@@ -100,6 +101,67 @@ function getObjectStore(objectStores, name, transaction) {
 
 
 /**
+ * Converts a maybe to null if Nothing
+ */
+function unwrapMaybe(maybe, defaultVal) {
+    switch (maybe.ctor) {
+    case 'Just':
+        return maybe._0;
+    case 'Nothing':
+        return defaultVal; // defaults to undefined
+    default:
+        throw new Error(
+            "Maybe has value other than Just or Nothing (" + maybe.ctor + ")"
+        );
+    }
+}
+
+
+/**
+ * Function to map a nullable (or undefined) value to an elm maybe
+ */
+function wrapMaybe(value) {
+    if (value == null) {
+        return { ctor: 'Nothing' }
+    }
+    return {
+        ctor: 'Just',
+        _0: value
+    };
+}
+
+
+/**
+ * Convert an elm KeyRange to an IDBKeyRange
+ */
+function convertIDBKeyRange(keyRange) {
+    switch (keyRange.ctor) {
+    case "UpperBound":
+        // UpperBound Value Bool
+        return IDBKeyRange.upperBound(keyRange._0, keyRange._1);
+    case "LowerBound":
+        // LowerBound Value Bool
+        return IDBKeyRange.lowerBound(keyRange._0, keyRange._1);
+    case "Bound":
+        // Bound Value Value Bool Bool
+        return IDBKeyRange.bound(
+            keyRange._0,
+            keyRange._1,
+            keyRange._2,
+            keyRange._3
+        );
+    case "Only":
+        // Only Value
+        return IDBKeyRange.only(keyRange._0);
+    default:
+        throw new Error(
+            "Invalid KeyRange.ctor '" + keyRange.ctor + "', this " +
+            "is a bug in elm-indexeddb - please report it!"
+        );
+    }
+}
+
+/**
  * Applies an upgrade action to the database. Should only be called during
  * `onupgradeneeded`
  *
@@ -133,7 +195,7 @@ function applyUpgradeAction(db, action, objectStores, transaction) {
         if (!objectStores[action._0]) {
             getObjectStore(objectStores, action._0, transaction);
         }
-        objectStores[action._0].deleteIndex(action._1);
+        objectStores[action._0].delerteIndex(action._1);
         break;
     default:
         throw new Error(
@@ -187,46 +249,49 @@ function getTransactionParameters(operations) {
 /**
  *
  */
-function applyTransactionOperation(transaction, op) {
-    var store = transaction.objectStore(op._0);
+function applyTransactionOperation(transaction, op, results, resultIdx) {
+    var store = transaction.objectStore(op._0)
+      , maybeKeyRange
+      , request;
     op = op._1;
 
     switch (op.ctor) {
     case "Add":
         //console.log(op);
         // op._1 = Maybe Value
-        switch (op._1.ctor) {
-        case 'Just':
-            throw new Error("unimplemented");
-            // IDB call (with key)
-            store.add(op._0, op._1._0);
-            break;
-        case 'Nothing':
-            // IDB call
-            store.add(op._0);
-            break;
-        default:
-            throw new Error("Really should be unreachable");
-        }
+        request = store.add(op._0, unwrapMaybe(op._1));
         break;
     case "Clear":
         // IDB call
-        store.clear();
+        request = store.clear();
         break;
     case "Delete":
-        throw new Error("need keyorrange");
+        request = store.delete(convertIDBKeyRange(op._0));
         break;
     case "Put":
+        request = store.put(op._0, unwrapMaybe(op._1));
         break;
     case "Get":
+        request = store.get(convertIDBKeyRange(op._0));
         break;
     case "Count":
+        maybeKeyRange = unwrapMaybe(op._0);
+        if (maybeKeyRange == null) {
+            request = store.count();
+        } else {
+            request = store.count(convertIDBKeyRange(maybeKeyRange));
+        }
         break;
     default:
         throw new Error(
             "Invalid operation type '" + op.ctor + "', this " +
             "is a bug in elm-indexeddb - please report it!"
         );
+    }
+
+    // request.onerror is handled by the transaciton (I think :S)
+    request.onsuccess = function(evt) {
+        results[resultIdx] = evt.target.value;
     }
 }
 
@@ -297,7 +362,9 @@ function open(name, version, upgradeFn) {
  */
 function transaction(db, operations) {
     return _elm_lang$core$Native_Scheduler.nativeBinding(function(callback) {
-        var i, l, op, transParams, transaction;
+        var i, l, op, transParams, transaction
+          , results = new Array(operations.length); // for get results
+
         if (databases[db] == null) {
             callback(_elm_lang$core$Native_Scheduler.fail(noDatabaseError(db)));
             return;
@@ -321,13 +388,15 @@ function transaction(db, operations) {
 
         for (i=0, l=operations.length; i<l; i++) {
             op = operations[i];
-            applyTransactionOperation(transaction, op);
+            // results is pass by ref (is there a better way to do this)
+            applyTransactionOperation(transaction, op, results, i);
 
         }
 
         transaction.oncomplete = function(evt) {
-            //console.log("transaction.oncomplete");
-            callback(_elm_lang$core$Native_Scheduler.succeed());
+            //console.log(results);
+            results = _elm_lang$core$Native_List.fromArray(results.map(wrapMaybe));
+            callback(_elm_lang$core$Native_Scheduler.succeed(results));
         };
 
         transaction.onabort = function(evt) {

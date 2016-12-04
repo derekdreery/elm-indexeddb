@@ -1,7 +1,9 @@
 import Html
 import Html.Events as HtmlEvt
 import Task
+import Json.Decode as JSDec
 import Json.Encode as JSEnc
+import Json.Decode.Pipeline as P
 import IndexedDB
 import IndexedDB.Upgrades as IDBUpgrades
 import IndexedDB.Data as IDBData
@@ -15,9 +17,23 @@ main = Html.program
   }
 
 
+type alias Contact =
+  { id : Int
+  , name : String
+  }
+
+
+contactDecoder : JSDec.Decoder Contact
+contactDecoder =
+  P.decode Contact
+    |> P.required "id" JSDec.int
+    |> P.required "name" JSDec.string
+
+
 type alias Model =
   { db : Maybe IndexedDB.Db
   , err : Maybe IndexedDB.Error
+  , contacts: List Contact
   }
 
 
@@ -27,16 +43,22 @@ init =
     model =
       { db = Nothing
       , err = Nothing
+      , contacts = []
       }
   in
     (model, Cmd.none)
 
 
+-- UPDATE
+
+
 type Msg
-  = RequestCreateDatabase String Int
+  = RequestCreateDatabase
   | DatabaseCreated (Result IndexedDB.Error IndexedDB.Db)
-  | RequestDbUpdate IDBData.Transaction
-  | DbUpdated (Result IDBData.Error ())
+  | RequestAddContact
+  | ContactsAdded (Result IDBData.Error (List IDBData.Response))
+  | RequestGetContacts
+  | GotContacts (Result IDBData.Error (List IDBData.Response))
 
 
 subscriptions : Model -> Sub Msg
@@ -70,46 +92,98 @@ upgradeDb oldVersion newVersion =
   ]
 
 
-transaction : IDBData.Transaction
-transaction =
-  let
-    contact =
-      JSEnc.object
-        [ ("id", JSEnc.int 0)
-        , ("name", JSEnc.string "Joe Bloggs")
-        ]
-  in
-    [ IDBData.Operation "contact" (IDBData.Add contact Nothing)
-    ]
-
-
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg model =
   case msg of
-    RequestCreateDatabase name version ->
+
+    -- create database
+    RequestCreateDatabase ->
       let
         openDb =
-          IndexedDB.open name version upgradeDb
+          IndexedDB.open "test" 1 upgradeDb
       in
         (model, Task.attempt DatabaseCreated openDb)
 
     DatabaseCreated (Ok db) ->
       ({ model | db = Just db }, Cmd.none)
 
-    RequestDbUpdate transaction ->
+    DatabaseCreated (Err err) ->
+      let
+        err2 = Debug.log "failed to create db" err
+      in
+        (model, Cmd.none)
+
+    -- create tables
+    RequestAddContact ->
       case model.db of
         Just db ->
           let
-            updateDb =
+            contact =
+              JSEnc.object
+                [ ("id", JSEnc.int 0)
+                , ("name", JSEnc.string "Joe Bloggs")
+                ]
+            trans =
+              [ IDBData.Operation "contact" (IDBData.Add contact Nothing)
+              ]
+            addContact =
+              IndexedDB.transaction db trans
+          in
+            (model, Task.attempt ContactsAdded addContact)
+        Nothing ->
+          (model, Cmd.none)
+
+    ContactsAdded (Ok a) ->
+      (model, Cmd.none)
+
+
+    -- fetch contacts
+    RequestGetContacts ->
+      case model.db of
+        Just db ->
+          let
+            op =
+              JSEnc.int 0
+              |> IDBData.Only -- make keyRange
+              |> IDBData.Get -- make operation
+            transaction =
+              [ IDBData.Operation "contact" op
+              ]
+            getContacts =
               IndexedDB.transaction db transaction
           in
-            (model, Task.attempt DbUpdated updateDb)
+            (model, Task.attempt GotContacts getContacts)
         Nothing ->
-          Debug.crash "error"
+          (model, Cmd.none)
+
+    GotContacts (Ok result) ->
+      let
+        responses =
+          case result of
+            Just a ->
+              a
+
+            Nothing ->
+              Debug.crash "error"
+
+        contacts =
+          case (List.head responses) of
+            Just a ->
+              a
+
+            Nothing ->
+              Debug.crash "error"
+
+        decodedContacts = JSDec.decodeValue (JSDec.list contactDecoder) (List.head contacts)
+      in
+        ({ model | contacts = decodedContacts }, Cmd.none)
 
     {-DatabaseCreated (Err err) ->-}
     _ ->
       Debug.crash "error"
+
+
+-- VIEW
 
 
 view : Model -> Html.Html Msg
@@ -117,9 +191,12 @@ view model =
   Html.div []
     [ Html.text "Hello world"
     , Html.button
-      [ HtmlEvt.onClick (RequestCreateDatabase "test" 1) ]
+      [ HtmlEvt.onClick (RequestCreateDatabase) ]
       [ Html.text "Create database" ]
     , Html.button
-      [ HtmlEvt.onClick (RequestDbUpdate transaction) ]
+      [ HtmlEvt.onClick (RequestAddContact) ]
       [ Html.text "Update contacts" ]
+    , Html.button
+      [ HtmlEvt.onClick (RequestGetContacts) ]
+      [ Html.text "Get contacts" ]
     ]

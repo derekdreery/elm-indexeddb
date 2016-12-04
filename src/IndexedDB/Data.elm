@@ -2,18 +2,18 @@ module IndexedDB.Data exposing
   ( Transaction
   , Operation(..)
   , OperationType(..)
-  , KeyOrRange
-  , KeyRange
+  , KeyRange(..)
   , ErrorType
   , Error
+  , Response
   )
 
 {-| This module contains the possible data operations.
 
 # Types
 
-@docs Transaction, Operation, OperationType, KeyRange, KeyOrRange, ErrorType,
-      Error
+@docs Transaction, Operation, OperationType, KeyRange, ErrorType,
+      Error, Response
 -}
 
 import IndexedDB.Common exposing (StoreName, IndexName)
@@ -38,38 +38,34 @@ type OperationType
   -- Remove all objects
   | Clear
   -- Delete all objects in range
-  | Delete KeyOrRange
+  | Delete KeyRange
   -- Get the 'first' object in range or object with key
-  | Get KeyOrRange
+  | Get KeyRange
   -- Get the 'first' key in range or returns itself if key exists
-  --| GetKey KeyOrRange
+  --| GetKey KeyRange
   -- Get all objects, optionally filter by keyrange or limit # of records
-  --| GetAll (Maybe KeyOrRange) (Maybe Int)
+  --| GetAll (Maybe KeyRange) (Maybe Int)
   -- As above, but fetching keys
-  --| GetAllKeys (Maybe KeyOrRange) (Maybe Int)
+  --| GetAllKeys (Maybe KeyRange) (Maybe Int)
   -- Update object with new value (provide a key if using out-of-
   | Put Value (Maybe Value)
   -- Count number of records
-  | Count
+  | Count (Maybe KeyRange)
   -- TODO Index
   -- TODO OpenCursor
   -- TODO OpenKeyCursor
 
 
 {-| A range of keys. Used in object store operations
+
+In all cases, bool means exclusive greater-than or less-than (i.e. not equal
+to)
 -}
 type KeyRange
   = UpperBound Value Bool
   | LowerBound Value Bool
   | Bound Value Value Bool Bool
   | Only Value
-
-
-{-| A key or key range
--}
-type KeyOrRange
-  = Key Value
-  | Range KeyRange
 
 
 {-| The various errors that can be returned from indexeddb e.g.
@@ -87,3 +83,8 @@ type ErrorType
 type alias Error = ErrorType String
 
 
+{-| The response to an operation.
+
+Will be `Just val` for certain operations and `Nothing` for others TODO doc
+-}
+type alias Response = Maybe Value

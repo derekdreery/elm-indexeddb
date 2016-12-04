@@ -30,7 +30,6 @@ type Error
   | NoIndexedDBError String
 
 
-
 {-| An indexedDB database
 -}
 type Db = Db Int
@@ -47,6 +46,6 @@ open =
 
 {-| Execute a database transaction.
 -}
-transaction : Db -> Data.Transaction -> Task Data.Error ()
+transaction : Db -> Data.Transaction -> Task Data.Error (List Data.Response)
 transaction =
   Native.IndexedDB.transaction
