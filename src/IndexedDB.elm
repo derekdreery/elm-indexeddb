@@ -5,11 +5,11 @@ module IndexedDB exposing (Error, Db, open, transaction)
 
 # Types
 
-@docs Error, Db, transaction
+@docs Error, Db
 
 # Functions
 
-@docs open
+@docs open, transaction
 
 -}
 
@@ -32,7 +32,7 @@ type Error
 
 {-| An indexedDB database
 -}
-type Db = Db Int
+type alias Db = Int
 
 
 {-| Open an indexedDB database.
@@ -49,3 +49,10 @@ open =
 transaction : Db -> Data.Transaction -> Task Data.Error (List Data.Response)
 transaction =
   Native.IndexedDB.transaction
+
+
+{-{-| Execute a single operation
+
+Convenience method
+-}
+operation : Db -> Data.Operation -> Task Data.Error Data.Response -}
