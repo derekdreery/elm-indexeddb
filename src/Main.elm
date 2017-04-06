@@ -137,7 +137,7 @@ update msg model =
                         ( model, Task.attempt ContactsAdded addContact )
 
                 Nothing ->
-                    ( model, Cmd.none )
+                    ( Debug.log "Error: db not instantiated" model, Cmd.none )
 
         ContactsAdded (Ok a) ->
             ( model, Cmd.none )
@@ -167,7 +167,7 @@ update msg model =
                         ( model, Task.attempt GotContacts getContacts )
 
                 Nothing ->
-                    ( model, Cmd.none )
+                    ( Debug.log "Error: db not instantiated" model, Cmd.none )
 
         GotContacts (Ok result) ->
             let

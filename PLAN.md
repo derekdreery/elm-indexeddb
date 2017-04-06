@@ -122,6 +122,51 @@ framework that could be used with different backends.
 I have some existing experimentation at 
 [https://github.com/derekdreery/elm-indexeddb](https://github.com/derekdreery/elm-indexeddb).
 
+### Progress notes
+
+I'm not sure I agree with the implementation strategy in imby's version of the
+library. There are places where it is easy to exploit the type system to
+provide better static guarantees. For example, there is a method called
+createObjectStore that is only valid in an upgrade transaction, but this is
+not enforced at compile time, and there will be a runtime error if the user
+does this.
+
+As an example of an alternative strategy, the database upgrade function could
+be required to return a list of operations, that when executed update the
+database. This removes the need for methods like createObjectStore above, and
+so removes the incorrect code path where this method is called in the wrong
+context. It also makes the API more declarative without losing any flexibility.
+
+In my current experimentation, I'm avoiding any declarative abstractions like
+the one above if they reduce functionality. At the moment I am trying to
+understand transactions: (ignoring errors) A transaction has callbacks for
+complete.
+
+#### Update 2
+
+The old scope doesn't really make clear how long a transaction lasts. An
+implementation has discretion to end a transaction whenever it wants. However,
+reading the new scope yealds
+
+> When a transaction has been started and it can no longer become active, the
+> implementation must attempt to commit it, as long as the transaction has not
+> been aborted. This usually happens after all requests placed against the
+> transaction have been executed and their returned results handled, and no
+> new requests have been placed against the transaction.
+
+This suggests that if a transaction is created and loaded with requests, it
+will (normally) commit as soon as all those requests have run. Also,
+
+> Transactions are expected to be short lived. This is encouraged by the
+> automatic committing functionality described below.
+
+> Authors can still cause transactions to run for a long time; however, this
+> usage pattern is not generally recommended as it can lead to a bad user
+> experience.
+
+Which offers some justification to encouraging the use of a transaction per
+data update.
+
  [ERP]: https://en.wikipedia.org/wiki/Exposure_therapy
  [currentSpec]: https://www.w3.org/TR/IndexedDB/
  [draftSpec]: https://w3c.github.io/IndexedDB/
