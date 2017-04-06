@@ -1,4 +1,7 @@
+module Main exposing (..)
+
 import Html
+import Html.Attributes as Attr
 import Html.Events as HtmlEvt
 import Task
 import Json.Decode as JSDec
@@ -7,180 +10,201 @@ import Json.Decode.Pipeline as P
 import IndexedDB
 import IndexedDB.Upgrades as IDBUpgrades
 import IndexedDB.Data as IDBData
+import IndexedDB.Error exposing (Error)
 
 
-main = Html.program
-  { init = init
-  , update = update
-  , subscriptions = subscriptions
-  , view = view
-  }
+main =
+    Html.program
+        { init = init
+        , update = update
+        , subscriptions = subscriptions
+        , view = view
+        }
 
 
 type alias Contact =
-  { id : Int
-  , name : String
-  }
+    { name : String
+    }
 
 
 contactDecoder : JSDec.Decoder Contact
 contactDecoder =
-  P.decode Contact
-    |> P.required "id" JSDec.int
-    |> P.required "name" JSDec.string
+    P.decode Contact
+        --|> P.required "id" JSDec.int
+        |> P.required "name" JSDec.string
 
 
 type alias Model =
-  { db : Maybe IndexedDB.Db
-  , err : Maybe IndexedDB.Error
-  , contacts: List Contact
-  }
+    { db : Maybe IndexedDB.Db
+    , err : Maybe Error
+    , contacts : List Contact
+    , newContact : String
+    }
 
 
-init : (Model, Cmd Msg)
+init : ( Model, Cmd Msg )
 init =
-  let
-    model =
-      { db = Nothing
-      , err = Nothing
-      , contacts = []
-      }
-  in
-    (model, Cmd.none)
+    let
+        model =
+            { db = Nothing
+            , err = Nothing
+            , contacts = []
+            , newContact = ""
+            }
+    in
+        ( model, Cmd.none )
+
 
 
 -- UPDATE
 
 
 type Msg
-  = RequestCreateDatabase
-  | DatabaseCreated (Result IndexedDB.Error IndexedDB.Db)
-  | RequestAddContact
-  | ContactsAdded (Result IDBData.Error (List IDBData.Response))
-  | RequestGetContacts
-  | GotContacts (Result IDBData.Error (List IDBData.Response))
+    = RequestCreateDatabase
+    | DatabaseCreated (Result Error IndexedDB.Db)
+    | RequestAddContact
+    | ContactsAdded (Result Error (List IDBData.Response))
+    | RequestGetContacts
+    | GotContacts (Result Error (List IDBData.Response))
+    | ChangeNewContact String
 
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
-  Sub.none
+    Sub.none
 
 
 objectStoreOptions =
-  { keyPath = IDBUpgrades.SingleKeyPath "id"
-  , autoIncrement = False
-  }
+    { keyPath = IDBUpgrades.SingleKeyPath "name"
+    , autoIncrement = False
+    }
 
 
 objectStoreOptions2 =
-  { keyPath = IDBUpgrades.MultiKeyPath ["id", "name"]
-  , autoIncrement = False
-  }
+    { keyPath = IDBUpgrades.MultiKeyPath [ "id", "name" ]
+    , autoIncrement = False
+    }
 
 
 indexOptions =
-  { unique = False
-  , multiEntry = False
-  }
+    { unique = False
+    , multiEntry = False
+    }
 
 
 upgradeDb : Int -> Int -> List IDBUpgrades.Operation
 upgradeDb oldVersion newVersion =
-  [ IDBUpgrades.AddObjectStore "contact" objectStoreOptions
-  , IDBUpgrades.AddObjectStore "test" objectStoreOptions2
-  , IDBUpgrades.AddIndex "test" "testIdx" (IDBUpgrades.SingleKeyPath "testKey") indexOptions
-  ]
+    [ IDBUpgrades.AddObjectStore "contact" objectStoreOptions
+    , IDBUpgrades.AddObjectStore "test" objectStoreOptions2
+    , IDBUpgrades.AddIndex "test" "testIdx" (IDBUpgrades.SingleKeyPath "testKey") indexOptions
+    ]
 
 
-update : Msg -> Model -> (Model, Cmd Msg)
+update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
-  case msg of
+    case msg of
+        -- create database
+        RequestCreateDatabase ->
+            let
+                openDb =
+                    IndexedDB.open "test" 1 upgradeDb
+            in
+                ( model, Task.attempt DatabaseCreated openDb )
 
-    -- create database
-    RequestCreateDatabase ->
-      let
-        openDb =
-          IndexedDB.open "test" 1 upgradeDb
-      in
-        (model, Task.attempt DatabaseCreated openDb)
+        DatabaseCreated (Ok db) ->
+            ( { model | db = Just db }, Cmd.none )
 
-    DatabaseCreated (Ok db) ->
-      ({ model | db = Just db }, Cmd.none)
+        DatabaseCreated (Err e) ->
+            ( { model | err = Just e }, Cmd.none )
 
-    DatabaseCreated (Err err) ->
-      let
-        err2 = Debug.log "failed to create db" err
-      in
-        (model, Cmd.none)
+        -- create tables
+        RequestAddContact ->
+            case model.db of
+                Just db ->
+                    let
+                        contact =
+                            JSEnc.object
+                                [ ( "name", JSEnc.string model.newContact )
+                                ]
 
-    -- create tables
-    RequestAddContact ->
-      case model.db of
-        Just db ->
-          let
-            contact =
-              JSEnc.object
-                [ ("id", JSEnc.int 0)
-                , ("name", JSEnc.string "Joe Bloggs")
-                ]
-            trans =
-              [ IDBData.Operation "contact" (IDBData.Add contact Nothing)
-              ]
-            addContact =
-              IndexedDB.transaction db trans
-          in
-            (model, Task.attempt ContactsAdded addContact)
-        Nothing ->
-          (model, Cmd.none)
+                        trans =
+                            [ ( "contact", IDBData.Add contact Nothing )
+                            ]
 
-    ContactsAdded (Ok a) ->
-      (model, Cmd.none)
+                        addContact =
+                            IndexedDB.transaction db trans
+                    in
+                        ( model, Task.attempt ContactsAdded addContact )
 
+                Nothing ->
+                    ( model, Cmd.none )
 
-    -- fetch contacts
-    RequestGetContacts ->
-      case model.db of
-        Just db ->
-          let
-            op =
-              JSEnc.int 0
-              |> IDBData.Only -- make keyRange
-              |> IDBData.Get -- make operation
-            transaction =
-              [ IDBData.Operation "contact" op
-              ]
-            getContacts =
-              IndexedDB.transaction db transaction
-          in
-            (model, Task.attempt GotContacts getContacts)
-        Nothing ->
-          (model, Cmd.none)
+        ContactsAdded (Ok a) ->
+            ( model, Cmd.none )
 
-    GotContacts (Ok result) ->
-      let
-        responses =
-          case result of
-            Just a ->
-              a
+        ContactsAdded (Err e) ->
+            let
+                etmp = Debug.log "Error" e
+            in
+                ( model, Cmd.none )
 
-            Nothing ->
-              Debug.crash "error"
+        -- fetch contacts
+        RequestGetContacts ->
+            case model.db of
+                Just db ->
+                    let
+                        op =
+                            IDBData.GetAll
 
-        contacts =
-          case (List.head responses) of
-            Just a ->
-              a
+                        -- make operation
+                        transaction =
+                            [ ( "contact", op )
+                            ]
 
-            Nothing ->
-              Debug.crash "error"
+                        getContacts =
+                            IndexedDB.transaction db transaction
+                    in
+                        ( model, Task.attempt GotContacts getContacts )
 
-        decodedContacts = JSDec.decodeValue (JSDec.list contactDecoder) (List.head contacts)
-      in
-        ({ model | contacts = decodedContacts }, Cmd.none)
+                Nothing ->
+                    ( model, Cmd.none )
 
-    {-DatabaseCreated (Err err) ->-}
-    _ ->
-      Debug.crash "error"
+        GotContacts (Ok result) ->
+            let
+                rtmp =
+                    Debug.log "Results" result
+                decoder =
+                    JSDec.decodeValue (JSDec.list contactDecoder)
+
+                contacts =
+                    result
+                        |> List.head
+                        |> Maybe.andThen identity -- (Maybe (Maybe a) -> Maybe a)
+                        |> Result.fromMaybe "error fetching results"
+                        |> Result.andThen decoder
+
+            in
+                case contacts of
+                    Ok contacts_ ->
+                        ( { model | contacts = contacts_ }, Cmd.none )
+
+                    Err e ->
+                        let
+                            etmp =
+                                Debug.log "Error" e
+                        in
+                            ( model, Cmd.none )
+
+        {- DatabaseCreated (Err err) -> -}
+        GotContacts (Err e) ->
+            let
+                etmp = Debug.log "Error" e
+            in
+               ( model, Cmd.none )
+
+        ChangeNewContact val ->
+            ( { model | newContact = val }, Cmd.none )
+
 
 
 -- VIEW
@@ -188,15 +212,50 @@ update msg model =
 
 view : Model -> Html.Html Msg
 view model =
-  Html.div []
-    [ Html.text "Hello world"
-    , Html.button
-      [ HtmlEvt.onClick (RequestCreateDatabase) ]
-      [ Html.text "Create database" ]
-    , Html.button
-      [ HtmlEvt.onClick (RequestAddContact) ]
-      [ Html.text "Update contacts" ]
-    , Html.button
-      [ HtmlEvt.onClick (RequestGetContacts) ]
-      [ Html.text "Get contacts" ]
-    ]
+    Html.div []
+        [ Html.h1 [] [ Html.text "Example IndexedDB App" ]
+        , Html.div []
+            [ Html.button
+                [ HtmlEvt.onClick (RequestCreateDatabase) ]
+                [ Html.text "Create database" ]
+            , Html.button
+                [ HtmlEvt.onClick (RequestGetContacts) ]
+                [ Html.text "Get contacts" ]
+            ]
+        , Html.div []
+            [ Html.label [] [ Html.text "New Contact" ]
+            , Html.input
+                [ Attr.value model.newContact
+                , HtmlEvt.onInput ChangeNewContact
+                ]
+                []
+            , Html.button
+                [ HtmlEvt.onClick (RequestAddContact) ]
+                [ Html.text "Add new contact" ]
+            ]
+        , Html.h1 [] [ Html.text "Contacts" ]
+        , Html.div []
+            (List.map
+                (\c ->
+                    (Html.div []
+                        [ Html.text (toString c.name)
+                        ]
+                    )
+                )
+                model.contacts
+            )
+        ]
+
+
+
+-- HELPER
+
+
+getError : Model -> String
+getError model =
+    case Debug.log "Error" model.err of
+        Just ( type_, msg ) ->
+            msg
+
+        Nothing ->
+            ""

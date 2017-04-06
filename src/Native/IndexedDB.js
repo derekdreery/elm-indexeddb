@@ -46,8 +46,9 @@ var abortError = {
  */
 function jsErrorToError(err) {
     return {
-        ctor: err.name,
-        _0: err.message
+        ctor: "_Tuple2",
+        _0: { ctor: err.name },
+        _1: err.message
     };
 }
 
@@ -224,6 +225,7 @@ function getTransactionParameters(operations) {
             write = true;
             break;
         case "Get":
+        case "GetAll":
         case "Count":
             // no-op
             break;
@@ -274,6 +276,9 @@ function applyTransactionOperation(transaction, op, results, resultIdx) {
     case "Get":
         request = store.get(convertIDBKeyRange(op._0));
         break;
+    case "GetAll":
+        request = store.getAll();
+        break;
     case "Count":
         maybeKeyRange = unwrapMaybe(op._0);
         if (maybeKeyRange == null) {
@@ -291,7 +296,8 @@ function applyTransactionOperation(transaction, op, results, resultIdx) {
 
     // request.onerror is handled by the transaciton (I think :S)
     request.onsuccess = function(evt) {
-        results[resultIdx] = evt.target.value;
+        //debugger;
+        results[resultIdx] = evt.target.result;
     }
 }
 
@@ -323,9 +329,7 @@ function open(name, version, upgradeFn) {
         }
 
         request.onsuccess = function(event) {
-            var id = dbid++;
-            databases[id] = event.target.result;
-            callback(_elm_lang$core$Native_Scheduler.succeed(id));
+            callback(_elm_lang$core$Native_Scheduler.succeed(event.target.result));
         }
 
         request.onupgradeneeded = function(event) {
@@ -365,11 +369,10 @@ function transaction(db, operations) {
         var i, l, op, transParams, transaction
           , results = new Array(operations.length); // for get results
 
-        if (databases[db] == null) {
+        if (db == null) {
             callback(_elm_lang$core$Native_Scheduler.fail(noDatabaseError(db)));
             return;
         }
-        db = databases[db];
         // convert to array for ease of use
         operations = _elm_lang$core$Native_List.toArray(operations);
         // Work out what we need to know to open the transaction
@@ -394,8 +397,8 @@ function transaction(db, operations) {
         }
 
         transaction.oncomplete = function(evt) {
-            //console.log(results);
             results = _elm_lang$core$Native_List.fromArray(results.map(wrapMaybe));
+            console.log(results);
             callback(_elm_lang$core$Native_Scheduler.succeed(results));
         };
 
