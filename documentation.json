@@ -2,15 +2,15 @@
   {
     "name": "IndexedDB",
     "comment": " This library enables access to [IndexedDB] in pure elm.\n\n[IndexedDB]: https://developer.mozilla.org/en-US/docs/Web/API/IndexedDB_API/Using_IndexedDB\n\n# Types\n\n@docs Db\n\n# Functions\n\n@docs open, transaction\n\n",
-    "aliases": [
+    "aliases": [],
+    "types": [
       {
         "name": "Db",
-        "comment": " An indexedDB database\n",
+        "comment": " An indexedDB database\n\nAn *opaque type* that can only be used in functions from this library.\n",
         "args": [],
-        "type": "Int"
+        "cases": []
       }
     ],
-    "types": [],
     "values": [
       {
         "name": "open",
@@ -23,81 +23,6 @@
         "type": "IndexedDB.Db -> IndexedDB.Data.Transaction -> Task.Task IndexedDB.Error.Error (List (Maybe.Maybe Json.Encode.Value))"
       }
     ],
-    "generated-with-elm-version": "0.18.0"
-  },
-  {
-    "name": "IndexedDB.Upgrades",
-    "comment": " This module contains the possible upgrade operations to a database.\n\nIt is used when creating an upgrade function `Int -> Int -> List Operation`\n\n# Types\n\n@docs Operation, ObjectStoreOptions, KeyPath\n",
-    "aliases": [
-      {
-        "name": "ObjectStoreOptions",
-        "comment": " Possible options when creating an object store\n",
-        "args": [],
-        "type": "{ keyPath : IndexedDB.Upgrades.KeyPath, autoIncrement : Bool }"
-      }
-    ],
-    "types": [
-      {
-        "name": "KeyPath",
-        "comment": " Possible types of keyPath for an object store/index\n",
-        "args": [],
-        "cases": [
-          [
-            "NoKeyPath",
-            []
-          ],
-          [
-            "SingleKeyPath",
-            [
-              "String"
-            ]
-          ],
-          [
-            "MultiKeyPath",
-            [
-              "List String"
-            ]
-          ]
-        ]
-      },
-      {
-        "name": "Operation",
-        "comment": " A change to a database\n",
-        "args": [],
-        "cases": [
-          [
-            "AddObjectStore",
-            [
-              "IndexedDB.Common.StoreName",
-              "IndexedDB.Upgrades.ObjectStoreOptions"
-            ]
-          ],
-          [
-            "DeleteObjectStore",
-            [
-              "IndexedDB.Common.StoreName"
-            ]
-          ],
-          [
-            "AddIndex",
-            [
-              "IndexedDB.Common.StoreName",
-              "IndexedDB.Common.IndexName",
-              "IndexedDB.Upgrades.KeyPath",
-              "IndexedDB.Upgrades.IndexOptions"
-            ]
-          ],
-          [
-            "DeleteIndex",
-            [
-              "IndexedDB.Common.StoreName",
-              "IndexedDB.Common.IndexName"
-            ]
-          ]
-        ]
-      }
-    ],
-    "values": [],
     "generated-with-elm-version": "0.18.0"
   },
   {
@@ -190,9 +115,88 @@
             ]
           ],
           [
+            "GetAll",
+            []
+          ],
+          [
             "Count",
             [
               "Maybe.Maybe IndexedDB.Data.KeyRange"
+            ]
+          ]
+        ]
+      }
+    ],
+    "values": [],
+    "generated-with-elm-version": "0.18.0"
+  },
+  {
+    "name": "IndexedDB.Upgrades",
+    "comment": " This module contains the possible upgrade operations to a database.\n\nIt is used when creating an upgrade function `Int -> Int -> List Operation`\n\n# Types\n\n@docs Operation, ObjectStoreOptions, KeyPath\n",
+    "aliases": [
+      {
+        "name": "ObjectStoreOptions",
+        "comment": " Possible options when creating an object store\n",
+        "args": [],
+        "type": "{ keyPath : IndexedDB.Upgrades.KeyPath, autoIncrement : Bool }"
+      }
+    ],
+    "types": [
+      {
+        "name": "KeyPath",
+        "comment": " Possible types of keyPath for an object store/index\n",
+        "args": [],
+        "cases": [
+          [
+            "NoKeyPath",
+            []
+          ],
+          [
+            "SingleKeyPath",
+            [
+              "String"
+            ]
+          ],
+          [
+            "MultiKeyPath",
+            [
+              "List String"
+            ]
+          ]
+        ]
+      },
+      {
+        "name": "Operation",
+        "comment": " A change to a database\n",
+        "args": [],
+        "cases": [
+          [
+            "AddObjectStore",
+            [
+              "IndexedDB.Common.StoreName",
+              "IndexedDB.Upgrades.ObjectStoreOptions"
+            ]
+          ],
+          [
+            "DeleteObjectStore",
+            [
+              "IndexedDB.Common.StoreName"
+            ]
+          ],
+          [
+            "AddIndex",
+            [
+              "IndexedDB.Common.StoreName",
+              "IndexedDB.Common.IndexName",
+              "IndexedDB.Upgrades.KeyPath",
+              "IndexedDB.Upgrades.IndexOptions"
+            ]
+          ],
+          [
+            "DeleteIndex",
+            [
+              "IndexedDB.Common.StoreName",
+              "IndexedDB.Common.IndexName"
             ]
           ]
         ]

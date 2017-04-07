@@ -22,7 +22,17 @@ main =
         }
 
 
+{-| A contact with a db id
+-}
 type alias Contact =
+    { id: Int
+    , name : String
+    }
+
+
+{-| A new contact without a db id
+-}
+type alias ContactNew =
     { name : String
     }
 
@@ -30,7 +40,7 @@ type alias Contact =
 contactDecoder : JSDec.Decoder Contact
 contactDecoder =
     P.decode Contact
-        --|> P.required "id" JSDec.int
+        |> P.required "id" JSDec.int
         |> P.required "name" JSDec.string
 
 
@@ -51,8 +61,13 @@ init =
             , contacts = []
             , newContact = ""
             }
+
+        openDb =
+            IndexedDB.open "test" 1 upgradeDb
+
     in
-        ( model, Cmd.none )
+        -- request db initialization
+        model ! [Task.attempt DatabaseCreated openDb]
 
 
 
@@ -60,12 +75,14 @@ init =
 
 
 type Msg
-    = RequestCreateDatabase
-    | DatabaseCreated (Result Error IndexedDB.Db)
+    --= RequestCreateDatabase
+    = DatabaseCreated (Result Error IndexedDB.Db)
     | RequestAddContact
     | ContactsAdded (Result Error (List IDBData.Response))
     | RequestGetContacts
-    | GotContacts (Result Error (List IDBData.Response))
+    | GotContacts (Result Error IDBData.Response)
+    | RequestDeleteContact Int
+    | DeletedContact (Result Error ())
     | ChangeNewContact String
 
 
@@ -75,8 +92,8 @@ subscriptions model =
 
 
 objectStoreOptions =
-    { keyPath = IDBUpgrades.SingleKeyPath "name"
-    , autoIncrement = False
+    { keyPath = IDBUpgrades.SingleKeyPath "id"
+    , autoIncrement = True
     }
 
 
@@ -97,25 +114,19 @@ upgradeDb oldVersion newVersion =
     [ IDBUpgrades.AddObjectStore "contact" objectStoreOptions
     , IDBUpgrades.AddObjectStore "test" objectStoreOptions2
     , IDBUpgrades.AddIndex "test" "testIdx" (IDBUpgrades.SingleKeyPath "testKey") indexOptions
+    , IDBUpgrades.AddIndex "contact" "name_idx" (IDBUpgrades.SingleKeyPath "name") indexOptions
     ]
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
-        -- create database
-        RequestCreateDatabase ->
-            let
-                openDb =
-                    IndexedDB.open "test" 1 upgradeDb
-            in
-                ( model, Task.attempt DatabaseCreated openDb )
-
+        -- database created
         DatabaseCreated (Ok db) ->
-            ( { model | db = Just db }, Cmd.none )
+            { model | db = Just db } ! [ requestGetContacts (Just db) ]
 
         DatabaseCreated (Err e) ->
-            ( { model | err = Just e }, Cmd.none )
+            { model | err = e |> Debug.log "error" |> Just } ! []
 
         -- create tables
         RequestAddContact ->
@@ -140,13 +151,13 @@ update msg model =
                     ( Debug.log "Error: db not instantiated" model, Cmd.none )
 
         ContactsAdded (Ok a) ->
-            ( model, Cmd.none )
+            model ! [ requestGetContacts model.db ]
 
         ContactsAdded (Err e) ->
             let
                 etmp = Debug.log "Error" e
             in
-                ( model, Cmd.none )
+                model ! []
 
         -- fetch contacts
         RequestGetContacts ->
@@ -157,12 +168,12 @@ update msg model =
                             IDBData.GetAll
 
                         -- make operation
-                        transaction =
-                            [ ( "contact", op )
-                            ]
+                        --transaction =
+                        --    [ ( "contact", op )
+                        --    ]
 
                         getContacts =
-                            IndexedDB.transaction db transaction
+                            IndexedDB.request db "contact" op
                     in
                         ( model, Task.attempt GotContacts getContacts )
 
@@ -178,8 +189,8 @@ update msg model =
 
                 contacts =
                     result
-                        |> List.head
-                        |> Maybe.andThen identity -- (Maybe (Maybe a) -> Maybe a)
+                        --|> List.head
+                        --|> Maybe.andThen identity -- (Maybe (Maybe a) -> Maybe a)
                         |> Result.fromMaybe "error fetching results"
                         |> Result.andThen decoder
 
@@ -200,10 +211,53 @@ update msg model =
             let
                 etmp = Debug.log "Error" e
             in
-               ( model, Cmd.none )
+                model ! []
+
+        RequestDeleteContact id ->
+            case model.db of
+                Just db ->
+                    let
+                        op =
+                            JSEnc.int id
+                                |> IDBData.Only
+                                |> IDBData.Delete
+                        deleteContact =
+                            IndexedDB.request db "contact" op
+                                |> Task.map (\x -> ())
+                    in
+                        model ! [ Task.attempt DeletedContact deleteContact ]
+                Nothing ->
+                    model ! []
+
+        DeletedContact (Ok ()) ->
+            model ! [ requestGetContacts model.db ]
+
+        DeletedContact (Err e) ->
+            let
+                etmp = Debug.log "Error" e
+            in
+                model ! []
 
         ChangeNewContact val ->
             ( { model | newContact = val }, Cmd.none )
+
+
+requestGetContacts : Maybe IndexedDB.Db -> Cmd Msg
+requestGetContacts db_ =
+    case db_ of
+        Just db ->
+            let
+                op =
+                    IDBData.GetAll
+
+                getContacts =
+                    IndexedDB.request db "contact" op
+            in
+                Task.attempt GotContacts getContacts
+
+        Nothing ->
+            Debug.log "Error no db" Cmd.none
+
 
 
 
@@ -213,7 +267,8 @@ update msg model =
 view : Model -> Html.Html Msg
 view model =
     Html.div []
-        [ Html.h1 [] [ Html.text "Example IndexedDB App" ]
+        [ Html.h1 [] [ Html.text "Example IndexedDB Todo App" ]
+        {-
         , Html.div []
             [ Html.button
                 [ HtmlEvt.onClick (RequestCreateDatabase) ]
@@ -222,8 +277,9 @@ view model =
                 [ HtmlEvt.onClick (RequestGetContacts) ]
                 [ Html.text "Get contacts" ]
             ]
+        -}
         , Html.div []
-            [ Html.label [] [ Html.text "New Contact" ]
+            [ Html.label [] [ Html.text "New Todo" ]
             , Html.input
                 [ Attr.value model.newContact
                 , HtmlEvt.onInput ChangeNewContact
@@ -231,21 +287,23 @@ view model =
                 []
             , Html.button
                 [ HtmlEvt.onClick (RequestAddContact) ]
-                [ Html.text "Add new contact" ]
+                [ Html.text "Add new Todo" ]
             ]
-        , Html.h1 [] [ Html.text "Contacts" ]
+        , Html.h1 [] [ Html.text "Todos" ]
         , Html.div []
             (List.map
                 (\c ->
                     (Html.div []
                         [ Html.text (toString c.name)
+                        , Html.button
+                            [ HtmlEvt.onClick (RequestDeleteContact c.id) ]
+                            [ Html.text "x" ]
                         ]
                     )
                 )
                 model.contacts
             )
         ]
-
 
 
 -- HELPER

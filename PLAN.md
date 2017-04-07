@@ -167,6 +167,11 @@ will (normally) commit as soon as all those requests have run. Also,
 Which offers some justification to encouraging the use of a transaction per
 data update.
 
+
+#### Update 3
+
+Testing blocked on next `elm-testable` update.
+
  [ERP]: https://en.wikipedia.org/wiki/Exposure_therapy
  [currentSpec]: https://www.w3.org/TR/IndexedDB/
  [draftSpec]: https://w3c.github.io/IndexedDB/

@@ -29,14 +29,13 @@ type alias Transaction =
 
 
 -}
-type
-    Operation
+type Operation
     -- Write
     = Add Value (Maybe Value)
     | Clear
     | Delete KeyRange
     | Put Value (Maybe Value)
-      -- Read
+    -- Read
     | Get KeyRange
     | GetAll
     | Count (Maybe KeyRange)
@@ -57,10 +56,15 @@ In `Bound`, the first value is the lower bound and the last value is the upper
 bound
 -}
 type KeyRange
-    = UpperBound Value Bool
-    | LowerBound Value Bool
-    | Bound Value Value Bool Bool
+    = UpperBound IsOpen Value
+    | LowerBound IsOpen Value
+    | Bound IsOpen Value IsOpen Value
     | Only Value
+
+
+{-| Simple alias to make type KeyRange more readable
+-}
+type alias IsOpen = Bool
 
 
 {-| The response to an operation.

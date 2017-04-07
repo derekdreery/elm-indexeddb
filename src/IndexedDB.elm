@@ -1,4 +1,4 @@
-module IndexedDB exposing (Db, open, transaction)
+module IndexedDB exposing (Db, open, transaction, request)
 
 {-| This library enables access to [IndexedDB] in pure elm.
 
@@ -10,7 +10,7 @@ module IndexedDB exposing (Db, open, transaction)
 
 # Functions
 
-@docs open, transaction
+@docs open, transaction, request
 
 -}
 
@@ -46,11 +46,15 @@ transaction =
     Native.IndexedDB.transaction
 
 
+{-| Execute a single request
 
-{--
-{-| Execute a single operation
-
-Convenience method
+Convenience method, executing a transaction with a single request
 -}
-operation : Db -> Data.Operation -> Task Data.Error Data.Response
---}
+request : Db -> String -> Data.Operation -> Task Error (Maybe Value)
+request db objStore op =
+    let
+        transRes =
+            transaction db [( objStore, op )]
+    in
+        Task.map (\x -> List.head x |> Maybe.andThen identity) transRes
+
