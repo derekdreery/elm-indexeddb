@@ -151,7 +151,7 @@ update msg model =
                     ( Debug.log "Error: db not instantiated" model, Cmd.none )
 
         ContactsAdded (Ok a) ->
-            model ! [ requestGetContacts model.db ]
+            { model | newContact = "" } ! [ requestGetContacts model.db ]
 
         ContactsAdded (Err e) ->
             let
@@ -268,16 +268,6 @@ view : Model -> Html.Html Msg
 view model =
     Html.div []
         [ Html.h1 [] [ Html.text "Example IndexedDB Todo App" ]
-        {-
-        , Html.div []
-            [ Html.button
-                [ HtmlEvt.onClick (RequestCreateDatabase) ]
-                [ Html.text "Create database" ]
-            , Html.button
-                [ HtmlEvt.onClick (RequestGetContacts) ]
-                [ Html.text "Get contacts" ]
-            ]
-        -}
         , Html.div []
             [ Html.label [] [ Html.text "New Todo" ]
             , Html.input

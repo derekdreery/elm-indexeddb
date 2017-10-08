@@ -41,7 +41,7 @@ open =
 
 {-| Execute a database transaction.
 -}
-transaction : Db -> Data.Transaction -> Task Error (List (Maybe Value))
+transaction : Db -> Data.Transaction -> Task Error (List Value)
 transaction =
     Native.IndexedDB.transaction
 
@@ -50,11 +50,16 @@ transaction =
 
 Convenience method, executing a transaction with a single request
 -}
-request : Db -> String -> Data.Operation -> Task Error (Maybe Value)
+request : Db -> String -> Data.Operation -> Task Error Value
 request db objStore op =
     let
         transRes =
             transaction db [( objStore, op )]
+        unwrap maybeEl =
+            case maybeEl of
+                Just el -> el
+                Nothing -> Debug.crash "unreachable"
+
     in
-        Task.map (\x -> List.head x |> Maybe.andThen identity) transRes
+        Task.map (\x -> List.head x |> unwrap) transRes
 

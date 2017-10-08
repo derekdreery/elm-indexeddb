@@ -131,6 +131,16 @@ function wrapMaybe(value) {
     };
 }
 
+/**
+ * Convert undefined to null
+ */
+function undefToNull(value) {
+    if (value == null) {
+        return null;
+    } else {
+        return value;
+    }
+}
 
 /**
  * Convert an elm KeyRange to an IDBKeyRange
@@ -397,7 +407,7 @@ function transaction(db, operations) {
         }
 
         transaction.oncomplete = function(evt) {
-            results = _elm_lang$core$Native_List.fromArray(results.map(wrapMaybe));
+            results = _elm_lang$core$Native_List.fromArray(results.map(undefToNull));
             console.log(results);
             callback(_elm_lang$core$Native_Scheduler.succeed(results));
         };
